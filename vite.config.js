@@ -5,6 +5,8 @@ import { ElementPlusResolver } from 'unplugin-vue-components/resolvers'
 import { fileURLToPath, URL } from 'node:url'
 import vue from '@vitejs/plugin-vue'
 
+import path from 'path';
+
 // https://vitejs.dev/config/
 export default defineConfig({
   plugins: [
@@ -17,7 +19,7 @@ export default defineConfig({
     }),],
   resolve: {
     alias: {
-      '@': fileURLToPath(new URL('./src', import.meta.url))
+      '@': path.resolve(__dirname, './src'), // 将 @ 配置为 src 目录的别名
     },
   },
   server: {
@@ -27,7 +29,8 @@ export default defineConfig({
     open: false,
     proxy: {
       "/api": {
-        target: "http://192.168.10.111:11434",
+        // target: "http://192.168.10.111:11434",
+        target: "http://127.0.0.1:11434",
         changeOrigin: false,
         // configure: (proxy, options) => {
         //   // 添加代理事件监听器，用于调试

@@ -43,7 +43,7 @@ var config = {
   html: true,
   xhtmlOut: true,
   breaks: true,
-  langPrefix: "lang-",
+  langPrefix: "language-",
   linkify: false,
   typographer: true,
   quotes: "“”‘’",

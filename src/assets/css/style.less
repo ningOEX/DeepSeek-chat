@@ -1,6 +1,15 @@
+@import url("common.less");
+@import url("user_message.less");
+@import url("ai_message.less");
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+html,
+body {
+  font-family: Arial, sans-serif;
+  @apply bg-gray-100;
+}
 
 /* 修改滚动条轨道的样式 */
 ::-webkit-scrollbar {
@@ -34,4 +43,13 @@
 
 .el-footer {
   --el-footer-padding: 0 !important;
+}
+
+.dark {
+  background: var(--dark-bgColor);
+  color: var(--dark-color);
+}
+.dim {
+  background-color: var(--dim-bgColor);
+  color: var(--dim-color);
 }
