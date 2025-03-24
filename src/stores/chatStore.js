@@ -9,20 +9,35 @@ export const useChatStore = defineStore("chat", () => {
   const isBuffer = ref(false); //是否正在输出流
   const loading = ref(false); // 是否在请求中
   const isShrink = ref(false); // 是否收起
+  const firstMessage = ref('') // 第一条消息
 
   // keyInputValue
   const inputValue = ref("");
 
-  const $reset = () => {
-    inputValue.value = "";
-  };
+  function setValue() {
+    inputValue.value = ' ';
+  }
 
   return {
     isBuffer: isBuffer.value,
     loading: loading.value,
     isSend: isSend.value,
     inputValue: inputValue.value,
-    $reset,
+    setValue,
     isShrink: isShrink.value,
+    firstMessage:firstMessage.value,
   };
 });
+
+
+// export const useChatStore = defineStore('chat', {
+//   state: () => ({
+//     isSend:false,// 是否发送第一条信息
+//     isBuffer:false,//是否正在输出流
+//     loading:false,// 是否在请求中
+//     isShrink:false,// 是否收起
+//   }),
+//   getters: {
+//
+//   },
+// })

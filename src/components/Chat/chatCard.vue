@@ -1,20 +1,24 @@
-<script setup lang="ts">
+<script setup>
 import { ref, watch, onMounted, computed, nextTick } from "vue";
 import newChatButton from "@/components/Button/newChatButton.vue";
 import { useChatStore } from "@/stores/chatStore.js";
 import markdownIt from "@/services/markdown/md-config";
 import { serverModel } from "@/services/model/serverModel";
 import { ElMessage } from "element-plus";
+import {createTooltip} from "@/utils/chat.js"
 
-import {buildCodeBlock} from "@/services/markdown/code-block"
+import {
+  buildCodeBlock
+} from "@/services/markdown/code-block";
 
+import {renderBlock} from "@/services/markdown/md-render.js"
 // icon
 import user_avatar from "@/assets/img/logo.png";
 import deepSeek from "@/assets/img/DeepSeek.png";
 import icon_toggle_up from "@/assets/img/icon_toggle_up.png";
 import icon_toggle_button from "@/assets/img/icon_toggle_button.png";
-import copy from "@/assets/img/copy.png";
-import reset from "@/assets/img/reset.png";
+import copy from "@/assets/img/icon_copy.png";
+import reset from "@/assets/img/icon_reset.png";
 
 // api
 import { generateChat } from "@/api/index.js";
@@ -46,25 +50,12 @@ const payload = ref({
   },
 });
 
-/**
- * 核心流程
- * setp 1 获取流数据处理输出
- * setp 2 将用户消息添加到 chatBox
- * setp 3 将流式输出数据进行处理（markdown处理/按钮添加处理/点击事件处理）
- * setp 4
- */
-
-interface ChatMessageList {
-  userMessage: string; //用户消息
-  initAImessageCopy: string; //原始数据 用于复制
-  id: string;
-}
-
-const chatMessageList = ref<ChatMessageList>([]); //chat list
+const chatMessageList = ref([]); //chat list
 
 watch(
   () => chatStore.inputValue,
   async (newVal) => {
+    if (newVal === '') return
     createUserMessage(); // 创建一条用户消息
     scrollChatBox();
     await generateChatHandle(); // 请求一条回复消息
@@ -89,19 +80,20 @@ const generateChatHandle = async () => {
 
     // 回复消息
     await handleChat(res, messageId);
-
     if (!chatStore.isBuffer) {
       //绑定事件
-      bindToggleEvent(messageId);
+      await bindToggleEvent(messageId);
 
       // 绑定事件/添加复制按钮
       bindHoverEvent(messageId);
+
+      bindCopyResetHover(messageId);
     }
   } else {
     dynamicAddMessage(errText, messageId);
     console.error("状态 err", res);
   }
-  chatStore.$reset(); //清空输入内容
+  chatStore.inputValue = ''
 };
 // ======================
 // ======================
@@ -113,20 +105,18 @@ const generateChatHandle = async () => {
  * @param res
  * @param messageId 时间戳id
  */
-const handleChat = async (res: any, messageId) => {
+const handleChat = async (res, messageId) => {
   // 获取可读流
-  const reader = res.body?.getReader();
+  // const reader = res.body?.getReader();
+  chatStore.Get_Reader = res.body?.getReader();
   const decoder = new TextDecoder("utf-8");
 
-  let done = false;
   let chunk = "";
 
-  while (!done) {
-    const { done: chunkDone, value } = await reader.read();
-    // 流结束
-    done = chunkDone;
-
+  while (true) {
+    const { done, value } = await chatStore.Get_Reader.read();
     if (done) {
+      // 流结束
       chatStore.isBuffer = false; // 切换状态 流读取完毕
       const chat = {
         userMessage: payload.value.prompt,
@@ -134,15 +124,20 @@ const handleChat = async (res: any, messageId) => {
         id: messageId,
       };
       chatMessageList.value.push(chat);
+      chatStore.inputValue = ''
       console.log("buffer 结束");
       break;
     }
 
     // 解码并处理数据
-    const _chunk = decoder.decode(value, { stream: true });
-    chunk += JSON.parse(_chunk).response;
-    // 实时将读取到的数据显示在 chatBox
-    dynamicAddMessage(chunk, messageId);
+    try {
+      const _chunk = decoder.decode(value, { stream: true });
+      chunk += JSON.parse(_chunk).response;
+      // 实时将读取到的数据显示在 chatBox
+      dynamicAddMessage(chunk, messageId);
+    } catch (e) {
+      console.error("解码失败", e);
+    }
   }
 };
 
@@ -151,7 +146,7 @@ const handleChat = async (res: any, messageId) => {
  */
 const scrollChatBox = () => {
   const chatBox = document.getElementById("chatBox");
-  emits("scrollButton", chatBox.clientHeight + 400);
+  emits("scrollButton", chatBox.clientHeight + 600);
 };
 
 /**
@@ -160,40 +155,15 @@ const scrollChatBox = () => {
  * @param messageId id（时间戳）
  */
 const dynamicAddMessage = (message, messageId) => {
-  console.log(messageId);
   const content = document.getElementById(messageId);
-
   if (content) {
-    const newContent = processThinkContent(message);
+    const newContent = processThinkContent(message, messageId);
     content.innerHTML = newContent.innerHTML;
+    // 代码美化
+    buildCodeBlock(content);
   }
-
   // 滚动到底部显示最新消息
   scrollChatBox();
-};
-
-//test
-const insertReasoningElem = (el) => {
-  const reasoningEl = document.createElement("div");
-  const parent = el.parentNode;
-
-  if (!parent) return null;
-  parent.insertBefore(reasoningEl, el);
-  reasoningEl.className = "cmba-reasoning-content";
-
-  const detailsEl = document.createElement("details");
-  detailsEl.open = true;
-  reasoningEl.appendChild(detailsEl);
-
-  const summaryEl = document.createElement("summary");
-  summaryEl.innerHTML = "思考内容🤔";
-  detailsEl.appendChild(summaryEl);
-
-  const reasoningTextDiv = document.createElement("div");
-  reasoningTextDiv.className = "markdown-content";
-  detailsEl.appendChild(reasoningTextDiv);
-
-  return reasoningTextDiv;
 };
 
 /**
@@ -202,7 +172,6 @@ const insertReasoningElem = (el) => {
 const copyToClipboard = async (text) => {
   try {
     await navigator.clipboard.writeText(text);
-
     ElMessage({
       message: "文本已复制到剪贴板",
       type: "success",
@@ -217,64 +186,115 @@ const copyToClipboard = async (text) => {
 };
 
 /**
+ * reset 重新生成
+ * @param messageId id
+ * @param userMsg 用户消息
+ */
+const resetContentMessage = async (messageId, userMsg) => {
+  /**
+   * 重新获取数据前，重置chatStore input,新的值进行赋值 出发监听事件
+   * 1.清除dom，通过父chatBox删除节点
+   * 2.根据上条userMassage重新请求数据
+   */
+  chatMessageList.value = chatMessageList.value.filter(
+    (chat) => chat.id !== messageId,
+  );
+  const oldDom = document.getElementById(messageId);
+  chatBox.value.removeChild(oldDom);
+  chatStore.inputValue = ''
+  chatStore.setValue(userMsg);
+  console.log(userMsg)
+  payload.value.prompt = userMsg
+
+  scrollChatBox();
+  await generateChatHandle(); // 请求一条回复消息
+};
+
+/**
  * 绑定盒子鼠标移动上去事件
  */
 const bindHoverEvent = (messageId) => {
   const content = document.getElementById(messageId);
-  //创建copy/reset
-  const footerBtn_ = createFooterCopyResetBtn();
-  content.appendChild(footerBtn_);
+  try {
+    //创建按钮
+    const footerBtn_ = createFooterCopyResetBtn();
+    content.appendChild(footerBtn_);
 
-  // 按钮所在盒子
-  const footerContainer = content.querySelector(".footer-container");
-  content.addEventListener("mouseover", () => {
-    // 移进
-    footerContainer.style.opacity = 1;
-  });
-  content.addEventListener("mouseout", () => {
-    // 移出
-    footerContainer.style.opacity = 0;
-  });
-
-  // 所有按钮注册事件
-  const footerBtn = content.querySelectorAll(
-    ".footer-container .footer_content img",
-  );
-  if (content) {
-    footerBtn.forEach((btn) => {
-      btn.addEventListener("click", async () => {
-        if (btn.alt === "copy") {
-          const text = chatMessageList.value.filter(
-            (res) => res.id === messageId,
-          )[0].initAImessageCopy;
-          console.log(text);
-          await copyToClipboard(text);
-        } else {
-          console.log("reset");
-        }
-      });
+    // 按钮所在盒子
+    const footerContainer = content.querySelector(".footer-container");
+    content.addEventListener("mouseover", () => {
+      footerContainer.style.opacity = 1;
     });
+    content.addEventListener("mouseout", () => {
+      footerContainer.style.opacity = 0;
+    });
+
+    // 所有按钮注册事件
+    const footerBtn = content.querySelectorAll(
+        ".footer-container .footer_content img",
+    );
+    if (content) {
+      footerBtn.forEach((btn) => {
+        btn.addEventListener("click", async () => {
+          if (btn.alt === "copy") {
+            const text = chatMessageList.value.filter(
+                (res) => res.id === messageId,
+            )[0].initAImessageCopy;
+            console.log(text);
+            await copyToClipboard(text);
+          } else {
+            const userMsg = chatMessageList.value.filter(
+                (chat) => chat.id === messageId,
+            );
+            await resetContentMessage(messageId, userMsg[0].userMessage);
+          }
+        });
+      });
+    }
+  }catch (e) {
+    console.log('bindHoverEvent',e)
   }
+
 };
 
 /**
  * 绑定展开/隐藏按钮的事件
  */
-const bindToggleEvent = (messageId) => {
+const bindToggleEvent = async (messageId) => {
+  await nextTick(); //节点已有
   const div = document.getElementById(messageId);
-  const headerContent = div.querySelector(".headerContent");
-  const toggle = div.querySelector(".headerContent .toggle_btn img");
-  const thinkContent = div.querySelector(".think-content");
-  toggle.style.display = "block";
-  headerContent.addEventListener("click", () => {
-    if (thinkContent.style.display === "none") {
-      thinkContent.style.display = "block";
-      toggle.src = icon_toggle_button;
-    } else {
-      thinkContent.style.display = "none";
-      toggle.src = icon_toggle_up;
-    }
-  });
+  try {
+    const headerContent = div.querySelector(".headerContent");
+    const toggle = div.querySelector(".headerContent .toggle_btn img");
+    const thinkContent = div.querySelector(".think-content");
+    toggle.style.display = "block";
+    headerContent.addEventListener("click", () => {
+      if (thinkContent.style.display === "none") {
+        thinkContent.style.display = "block";
+        toggle.src = icon_toggle_button;
+      } else {
+        thinkContent.style.display = "none";
+        toggle.src = icon_toggle_up;
+      }
+    });
+  }catch (e){
+    console.log('获取dom失败',e)
+  }
+};
+
+/**
+ * 绑定鼠标移动上去提示
+ * @param messageId
+ */
+const bindCopyResetHover = (messageId) => {
+  const content = document.getElementById(messageId);
+  try {
+    const footerBtn = content.querySelector(".footer-container .footer_content");
+    createTooltip(footerBtn.querySelector(".icon_copy"), "复制");
+    createTooltip(footerBtn.querySelector(".icon_reset"), "重答");
+  }catch (e) {
+    console.log('bindCopyResetHover',bindCopyResetHover)
+  }
 };
 
 // ======================
@@ -333,6 +353,7 @@ const createBotAvatar = () => {
   messageDiv.classList.add("bot_message");
   avatar.src = deepSeek;
   span.innerText = "DeepSeek-R1";
+  // think.innerText = '思考中🤔'
   messageDiv.appendChild(avatar);
   messageDiv.appendChild(span);
   headerContent.appendChild(messageDiv);
@@ -348,27 +369,31 @@ const createUserMessage = () => {
   addMessage(payload.value.prompt, obj_type.user);
 };
 
+const createIcon = (src, alt, className) => {
+  const icon = document.createElement("img");
+  icon.src = src;
+  icon.alt = alt;
+  icon.classList.add(className);
+  return icon;
+};
+
 /**
  * 创建footer copy/reset 按钮
  */
 const createFooterCopyResetBtn = () => {
   const footerContainer = document.createElement("div");
   const footerContent = document.createElement("div");
-  const icon_copy = document.createElement("img");
-  const icon_reset = document.createElement("img");
+
   // class
   footerContainer.classList.add("footer-container");
   footerContent.classList.add("footer_content");
 
-  //
-  icon_copy.src = copy;
-  icon_copy.alt = "copy";
-  icon_reset.src = reset;
-  icon_reset.alt = "reset";
+  // 创建图标
+  const iconCopy = createIcon(copy, "copy", "icon_copy");
+  const iconReset = createIcon(reset, "reset", "icon_reset");
 
-  footerContent.appendChild(icon_copy);
-  footerContent.appendChild(icon_reset);
-
+  // 将图标添加到内容中
+  footerContent.append(iconCopy, iconReset); // 使用 append 批量添加
   footerContainer.appendChild(footerContent);
 
   return footerContainer;
@@ -389,19 +414,17 @@ const createToggleButton = () => {
 /**
  * 处理 <think> 标签内容
  * @param {string} message 消息内容
+ * @param {string} messageId 消息id
  * @returns {HTMLElement} 处理后的消息元素
  */
-const processThinkContent = (message) => {
+const processThinkContent = (message, messageId) => {
   const messageContent = document.createElement("div");
-  messageContent.classList.add("content");
-
   // 创建头像
   const avatar = createBotAvatar();
   messageContent.appendChild(avatar);
   // 创建文本元素
   const textDiv = document.createElement("div");
   textDiv.classList.add("message-content");
-
   // 检查是否包含 <think> 标签
   const thinkMatch = message.match(/<think>([\s\S]*?)<\/think>/);
   if (thinkMatch) {
@@ -414,7 +437,7 @@ const processThinkContent = (message) => {
     } else {
       thinkDiv.innerHTML = markdownIt.render(thinkContent);
     }
-    thinkDiv.style.display = "none";
+    thinkDiv.style.display = "block";
 
     // 去除消息中的 <think> 标签内容，即回答内容
     const messageText = message.replace(/<think>[\s\S]*?<\/think>/, "");
@@ -428,6 +451,7 @@ const processThinkContent = (message) => {
   }
 
   if (message === errText) {
+    textDiv.classList.remove("think-content");
     messageContent.appendChild(avatar);
   }
   messageContent.appendChild(textDiv);
@@ -465,96 +489,24 @@ const toggleModel = (modelType) => {
 // ======================
 // ======================
 
-const copyHandler = (event)=>{
-  console.log('123',event)
-}
 onMounted(async () => {
   await nextTick();
 
-  const el = document.getElementById('1742523171514-822129')
-  console.log(el)
-  buildCodeBlock(el)
-
-  // toggleModel(model_type.model_R1); // 模型初始化
-  // createUserMessage(); // 创建一条用户消息
-  // await generateChatHandle(); // 请求一条回复消息
+  toggleModel(model_type.model_Company); // 模型初始化
+  createUserMessage(); // 创建一条用户消息
+  await generateChatHandle(); // 请求一条回复消息
 });
 </script>
 
 <template>
-  <div
-    id="chatBox"
-    ref="chatBox"
-    class="w-[96%] lg:w-[720px] xl:w-[820px] m-auto p-2 min-h-[93vh] relative"
-  >
-    <div id="1742523171514-822129" class="chatBotMessage">
-      <header class="headerContent">
-        <div class="bot_message">
-          <img src="/src/assets/img/DeepSeek.png" /><span>DeepSeek-R1</span>
-        </div>
-        <div class="toggle_btn">
-          <img
-            src="/src/assets/img/icon_toggle_up.png"
-            style="display: block"
-          />
-        </div>
-      </header>
-      <div class="think-content" style="display: none">
-        <p>
-          嗯，用户让我写一个JS输出“Hello
-          World”。这应该是一个很基础的练习。首先，我需要确认用户的需求是什么。他们可能刚开始学习JavaScript，想要了解如何在控制台中打印字符串。
-        </p>
-        <p>
-          那我应该怎么开始呢？我记得在JavaScript里，使用console.log()函数是常见的做法。所以，我可以写一段代码，里面包含"Hello
-          World"字符串，并用console.log调用它。
-        </p>
-        <p>
-          比如，代码可能是这样：console.log(“Hello World”);
-          这样应该就能在浏览器的控制台中看到输出了。嗯，这个方法简单直接，适合新手理解。
-        </p>
-        <p>
-          那用户可能需要的是一个完整的示例，包括HTML和CSS吗？或者只是纯JavaScript？考虑到他们只需要输出字符串，可能不需要额外的结构，所以只需要简单的JS代码就可以了。
-        </p>
-        <p>
-          另外，我应该确保代码是正确的，没有语法错误。检查一下引号是否正确，字符串内容有没有拼写错误。确认无误后就可以提供给用户了。
-        </p>
-      </div>
-      <div class="message-content">
-        <p>
-          当然可以！以下是一个简单使用 JavaScript 输出 “Hello World” 的示例：
-        </p>
-        <pre><code class="lang-html">&lt;!DOCTYPE html&gt;
-&lt;html&gt;
-&lt;head&gt;
-    &lt;title&gt;输出Hello World&lt;/title&gt;
-&lt;/head&gt;
-&lt;body&gt;
-    &lt;h1&gt;hello world&lt;/h1&gt;
-    &lt;script&gt;
-        console.log("Hello World");
-    &lt;/script&gt;
-&lt;/body&gt;
-&lt;/html&gt;
-</code></pre>
-        <p>
-          这段代码会在浏览器中显示 “Hello World”。<code>console.log()</code>
-          函数用于在控制台输出文本、数字或其他变量值。
-        </p>
-        <p>如果你只是想看到输出，也可以直接使用纯 JavaScript：</p>
-        <pre><code class="lang-javascript">console.log("Hello World");
-</code></pre>
-        <p>这样在控制台中会输出：</p>
-        <pre><code>Hello World
-</code></pre>
-      </div>
-      <div class="footer-container" style="opacity: 0">
-        <div class="footer_content">
-          <img src="/src/assets/img/copy.png" alt="copy" /><img
-            src="/src/assets/img/reset.png"
-            alt="reset"
-          />
-        </div>
-      </div>
+  <div class="w-[96%] lg:w-[720px] xl:w-[820px] m-auto p-2 min-h-[93vh]">
+    <div
+        id="chatBox"
+        ref="chatBox"
+        class="relative"
+    >
     </div>
+
   </div>
+
 </template>

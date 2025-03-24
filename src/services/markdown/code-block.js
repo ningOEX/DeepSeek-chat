@@ -1,6 +1,7 @@
 // import "highlight.js/styles/atom-one-dark.css";
 import $ from "jquery";
 import hljs from "highlight.js/lib/core";
+import "highlight.js/styles/foundation.css"; // 选择一个主题
 import javascript from "highlight.js/lib/languages/javascript";
 import vbscript from "highlight.js/lib/languages/vbscript";
 import python from "highlight.js/lib/languages/python";
@@ -14,6 +15,14 @@ import xml from "highlight.js/lib/languages/xml";
 import sql from "highlight.js/lib/languages/sql";
 import cpp from "highlight.js/lib/languages/cpp";
 import c from "highlight.js/lib/languages/c";
+import php from "highlight.js/lib/languages/php";
+import bash from "highlight.js/lib/languages/bash";
+import go from "highlight.js/lib/languages/go";
+import json from "highlight.js/lib/languages/json";
+import less from "highlight.js/lib/languages/less";
+import scss from "highlight.js/lib/languages/scss";
+import nginx from "highlight.js/lib/languages/nginx";
+
 
 hljs.registerLanguage("javascript", javascript);
 hljs.registerLanguage("vbscript", vbscript);
@@ -29,8 +38,17 @@ hljs.registerLanguage("css", css);
 hljs.registerLanguage("sql", sql);
 hljs.registerLanguage("cpp", cpp);
 hljs.registerLanguage("c", c);
+hljs.registerLanguage("php", php);
+hljs.registerLanguage("bash", bash);
+hljs.registerLanguage("go", go);
+hljs.registerLanguage("json", json);
+hljs.registerLanguage("less", less);
+hljs.registerLanguage("scss", scss);
+hljs.registerLanguage("nginx", nginx);
 
 hljs.configure({ ignoreUnescapedHTML: true });
+
+hljs.highlightAll(); //初始化
 
 const rootMdDivClassName = "markdown-content";
 
@@ -55,11 +73,11 @@ window.copyHandler = function (e) {
     navigator.clipboard
       .writeText(codeText)
       .then(() => {
-        btn.textContent = "已复制!";
+        btn.textContent = "YES";
 
         // 一段时间后恢复原来的文本
         setTimeout(() => {
-          btn.textContent = "复制";
+          btn.textContent = "COPY";
         }, 2000); // 2秒后恢复
       })
       .catch((err) => {
@@ -80,19 +98,23 @@ function buildCopyButton(element) {
 
   pres.forEach((pre) => {
     const codeElem = pre.querySelector("code");
-    if (!codeElem) return;
 
+    if (!codeElem) return;
+    const type = codeElem.className.split(' ')[0].toString().split('-')[1]
+    const typeHeadDiv = document.createElement('div')
+    typeHeadDiv.classList.add('code_type_content')
+    typeHeadDiv.innerText = type
     // 创建按钮
     const btn = document.createElement("span");
-    btn.id = String(Math.random());
     btn.className = "markdown-content-copy";
-    btn.textContent = "复制";
+    btn.textContent = "COPY";
 
     // 设置内联点击事件
     btn.setAttribute("onclick", "copyHandler(event)");
 
     // 将按钮添加到 pre 元素开头
     pre.insertBefore(btn, pre.firstChild);
+    pre.insertBefore(typeHeadDiv, pre.firstChild);
   });
 }
 
@@ -104,7 +126,7 @@ export function buildCodeBlock(element) {
 
 /** 核心函数, 对比节点的内容 实现动态更新 markdown 的 div 而不是用 innerHTML 的属性全部刷新 */
 export function deepCloneAndUpdate(div1, div2) {
-  if (div2.innerHTML == "") return;
+  if (div2.innerHTML === "") return;
   // 递归比较和更新 div1 和 div2 的子节点
   function compareAndUpdate(node1, node2) {
     // 情况 1：node1 是文本节点，更新文本内容

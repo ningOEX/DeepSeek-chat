@@ -1,13 +1,11 @@
 <script setup>
-import { ref, onMounted, computed } from "vue";
+import { ref, computed } from "vue";
 import { Position, Top } from "@element-plus/icons-vue";
 import { useChatStore } from "@/stores/chatStore.js";
 
 import myLoading from "@/components/myLaoding.vue";
-import { useRouter, useRoute } from "vue-router";
 
-const router = useRouter();
-const route = useRoute();
+
 const chatStore = useChatStore(); //chat 仓库
 
 const keyValue = ref(""); // 输入内容
@@ -15,6 +13,10 @@ const keyValue = ref(""); // 输入内容
 const isLoading = computed(() => {
   return chatStore.loading;
 });
+
+const isBuffer = computed(()=>{
+  return chatStore.isBuffer
+})
 
 /**
  * enter 事件
@@ -30,15 +32,23 @@ const handleEnter = (event) => {
  * send发送事件
  */
 const handleSend = () => {
-  if (keyValue.value.length <= 0) {
-    return false;
-  }
+  if(chatStore.isBuffer) return
   if (!chatStore.isSend) {
+    chatStore.firstMessage = keyValue.value;
     chatStore.isSend = true;
+  }
+  if(chatStore.isSend && chatStore.firstMessage.length <= 0){
+    chatStore.firstMessage = keyValue.value;
   }
   chatStore.inputValue = keyValue.value;
   keyValue.value = "";
 };
+
+const pauseRender = ()=>{
+  chatStore.Get_Reader.cancel()
+}
+
+
 </script>
 
 <template>
@@ -56,6 +66,7 @@ const handleSend = () => {
     <div
       class="rounded-2xl bg-white p-2 w-[96%] lg:w-[720px] xl:w-[820px] m-auto px-2"
     >
+
       <!-- 输入框 -->
       <el-input
         v-model="keyValue"
@@ -69,17 +80,18 @@ const handleSend = () => {
       <!-- 按钮 -->
       <div class="mt-2">
         <div class="pr-2 flex gap-2 justify-end items-center">
-          <div>
+          <div v-if="!isLoading">
             <el-icon
-              v-if="!isLoading"
-              :color="keyValue.length ? '#0084ff' : '#b9bbc0'"
-              size="28"
-              class="cursor-pointer"
-              @click="handleSend"
-              ><Position
+                v-if="!isBuffer"
+                :color="keyValue.length ? '#0084ff' : '#b9bbc0'"
+                size="24"
+                class="cursor-pointer"
+                @click="handleSend"
+            ><Position
             /></el-icon>
-            <myLoading v-else />
+            <div v-else class="pause" @click="pauseRender">| |</div>
           </div>
+          <myLoading class="mb-1" v-else />
         </div>
       </div>
     </div>

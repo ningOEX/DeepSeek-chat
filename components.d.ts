@@ -23,6 +23,7 @@ declare module 'vue' {
     Layout: typeof import('./src/components/Layout/index.vue')['default']
     MyAside: typeof import('./src/components/Chat/myAside.vue')['default']
     MyLaoding: typeof import('./src/components/myLaoding.vue')['default']
+    MyLoadLoading: typeof import('./src/components/myLoadLoading.vue')['default']
     NewChatButton: typeof import('./src/components/Button/newChatButton.vue')['default']
     RouterLink: typeof import('vue-router')['RouterLink']
     RouterView: typeof import('vue-router')['RouterView']

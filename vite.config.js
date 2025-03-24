@@ -29,8 +29,8 @@ export default defineConfig({
     open: false,
     proxy: {
       "/api": {
-        // target: "http://192.168.10.111:11434",
-        target: "http://127.0.0.1:11434",
+        target: "http://192.168.10.111:11434",
+        // target: "http://127.0.0.1:11434",
         changeOrigin: false,
         // configure: (proxy, options) => {
         //   // 添加代理事件监听器，用于调试

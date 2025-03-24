@@ -1,17 +1,10 @@
 <script setup lang="ts">
 import { ChatDotSquare } from "@element-plus/icons-vue";
 
-import { useRouter } from "vue-router";
-import { useChatStore } from "@/stores/chatStore.js";
-
-const router = useRouter();
-const chatStore = useChatStore();
+const emits = defineEmits(['newChat'])
 
 const handleNewChat = () => {
-  console.log("暂停开发");
-  return;
-  const chatId = chatStore.createChat(); // 新建对话
-  router.push({ name: "Chat", params: { chatId } }); // 跳转到新对话页面
+  emits('newChat',{})
 };
 </script>
 

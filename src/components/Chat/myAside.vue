@@ -16,6 +16,16 @@ const clickHandle = () => {
   chatStore.isShrink = !chatStore.isShrink;
   isOpen.value = chatStore.isShrink;
 };
+
+/**
+ * 该功能待优化 目前仅刷innerHTML
+ */
+const newChat = ()=>{
+  const chatBox = document.getElementById('chatBox')
+  chatBox.innerHTML = ''
+  chatStore.firstMessage = ''
+}
+
 </script>
 
 <template>
@@ -39,17 +49,11 @@ const clickHandle = () => {
         <el-scrollbar height="80vh">
           <div v-if="!isOpen" class="p-4">
             <div
+                @click="newChat"
               class="flex items-center gap-2 bg-blue-500 w-32 py-2 px-4 text-white my-4 rounded-lg"
             >
               <img :src="add_chat" class="w-6" alt="add_chat" />
               <span>新增对话</span>
-            </div>
-            <div class="">
-              <ol class="grid gap-2">
-                <li v-for="(item, index) in 10" :key="index" class="">
-                  TEST -
-                </li>
-              </ol>
             </div>
           </div>
           <div v-else class="grid items-center gap-4">
@@ -68,7 +72,7 @@ const clickHandle = () => {
         </el-scrollbar>
       </el-main>
       <el-footer>
-        <div v-if="!isOpen" class="p-4">Footer</div>
+        <div v-if="!isOpen" class="p-4 text-sm text-gray-500/40"></div>
       </el-footer>
     </el-container>
   </div>
